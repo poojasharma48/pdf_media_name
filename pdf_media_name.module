@@ -1,0 +1,89 @@
+<?php
+
+use Drupal\Core\Link;
+use Drupal\Core\Url;
+use Drupal\Core\Template\Attribute;
+
+function pdf_media_name_theme() {
+  return [
+    'file_link' => [
+      'variables' => ['file' => NULL, 'description' => NULL, 'attributes' => []],
+    ],
+  ];
+}
+
+
+/**
+ * Prepares variables for file link templates.
+ *
+ * Default template: file-link.html.twig.
+ *
+ * @param array $variables
+ *   An associative array containing:
+ *   - file: A File entity to which the link will be created.
+ *   - icon_directory: (optional) A path to a directory of icons to be used for
+ *     files. Defaults to the value of the "icon.directory" variable.
+ *   - description: A description to be displayed instead of the filename.
+ *   - attributes: An associative array of attributes to be placed in the a tag.
+ */
+function pdf_media_name_preprocess_file_link(&$variables) {
+ 
+  $file = $variables['file'];
+  $options = [];
+  $media_type = '';
+
+  // @todo Wrap in file_url_transform_relative(). This is currently
+  // impossible. As a work-around, we currently add the 'url.site' cache context
+  // to ensure different file URLs are generated for different sites in a
+  // multisite setup, including HTTP and HTTPS versions of the same site.
+  // Fix in https://www.drupal.org/node/2646744.
+  $url = $file->createFileUrl(FALSE);
+  $variables['#cache']['contexts'][] = 'url.site';
+
+  $mime_type = $file->getMimeType();
+  // Set options as per anchor format described at
+  // http://microformats.org/wiki/file-format-examples
+  $options['attributes']['type'] = $mime_type . '; length=' . $file->getSize();
+
+  // Use the description as the link text if available.
+  if (empty($variables['description'])) {
+    $link_text = $file->getFilename();
+  }
+  else {
+    $link_text = $variables['description'];
+    $options['attributes']['title'] = $file->getFilename();
+  }
+
+  // Classes to add to the file field for icons.
+  $classes = [
+    'file',
+    // Add a specific class for each and every mime type.
+    'file--mime-' . strtr($mime_type, ['/' => '-', '.' => '-']),
+    // Add a more general class for groups of well known MIME types.
+    'file--' . file_icon_class($mime_type),
+  ];
+
+  // Set file classes to the options array.
+  $variables['attributes'] = new Attribute($variables['attributes']);
+  $variables['attributes']->addClass($classes);
+  $variables['file_size'] = format_size($file->getSize());
+  // get media name and display it as title instead of media file name
+  $result = \Drupal::service('file.usage')->listUsage($file);
+  if(isset($result['file']['media'])){
+    $media_ary = $result['file']['media'];
+    foreach ($media_ary as $media_key => $media_val) {
+      if($media_key > 0){
+        $database = \Drupal::database();
+        $media_qry = $database->query("SELECT name, bundle FROM {media_field_data} WHERE mid = ".$media_key);
+        $media_rst = $media_qry->fetchAll();
+        if(isset($media_rst[0])){
+           $link_text = $media_rst[0]->name;
+           $media_type = $media_rst[0]->bundle;
+        }
+      }  
+    }
+  }
+  $variables['link'] = Link::fromTextAndUrl($link_text, Url::fromUri($url, $options))->toRenderable();
+  $variables['media_type'] = $media_type;
+  
+}

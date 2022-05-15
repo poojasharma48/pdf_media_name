@@ -1,0 +1,5 @@
+name: Pdf Media Name
+description: 'This module implement functionlaity to alter the pdf file name so that display media name.'
+core: 8.x
+package: Custom
+type: module
